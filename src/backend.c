@@ -1058,14 +1058,21 @@ static void assign_tproxy_address(struct stream *s)
 			size_t vlen;
 
 			/* bind to the IP in a header */
-			((struct sockaddr_in *)srv_conn->src)->sin_family = AF_INET;
-			((struct sockaddr_in *)srv_conn->src)->sin_port = 0;
-			((struct sockaddr_in *)srv_conn->src)->sin_addr.s_addr = 0;
 			if (http_get_htx_hdr(htxbuf(&s->req.buf),
 					     ist2(src->bind_hdr_name, src->bind_hdr_len),
 					     src->bind_hdr_occ, NULL, &vptr, &vlen)) {
-				((struct sockaddr_in *)srv_conn->src)->sin_addr.s_addr =
-					htonl(inetaddr_host_lim(vptr, vptr + vlen));
+				if (memchr(vptr, (int)'.', vlen) != NULL && memchr(vptr, (int)':', vlen) == NULL) {
+					((struct sockaddr_in *)srv_conn->src)->sin_family = AF_INET;
+					((struct sockaddr_in *)srv_conn->src)->sin_port = 0;
+					((struct sockaddr_in *)srv_conn->src)->sin_addr.s_addr = 0;
+					buf2ip(vptr, vlen, (struct in_addr *)&((struct sockaddr_in *)srv_conn->src)->sin_addr.s_addr);
+				}
+				else {
+					((struct sockaddr_in6 *)srv_conn->src)->sin6_family = AF_INET6;
+					((struct sockaddr_in6 *)srv_conn->src)->sin6_port = 0;
+					bzero(&((struct sockaddr_in6 *)srv_conn->src)->sin6_addr.s6_addr, 16);
+					buf2ip6(vptr, vlen, (struct in6_addr *)&((struct sockaddr_in6 *)srv_conn->src)->sin6_addr.s6_addr);
+				}
 			}
 		}
 		break;
